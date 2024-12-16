@@ -1,162 +1,422 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+import shelve
+import ipywidgets as widgets
+from prettytable import PrettyTable
+from IPython.display import display, clear_output
+import pdfplumber
+import csv
+from datetime import datetime
 
-# C extensions
-*.so
+# Testing
+import sys
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+sys.path.append('./MusicRent')
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+# Importing modules and printing functions and attributes
+try:
+    import subscriptionManager
+    import feedbackManager
+    print("Modules imported successfully!")
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+   
+    print("\nFunctions and attributes in subscriptionManager:")
+    print(dir(subscriptionManager))
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
+    
+    print("\nFunctions and attributes in feedbackManager:")
+    print(dir(feedbackManager))
 
-# Translations
-*.mo
-*.pot
+except ImportError as e:
+    print(f"Error importing modules: {e}")
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+# start off with blank window
+blank_window = widgets.VBox(
+    layout=widgets.Layout(
+        width='800px',
+        height='500px',
+        border='2px solid black',
+    )
 
-# Flask stuff:
-instance/
-.webassets-cache
+)
 
-# Scrapy stuff:
-.scrapy
+# create file paths
+file_path = r'C:\Users\olami\OneDrive - Loughborough University\MusicRent\Music_Info.pdf'
+file_path2 = r'C:\Users\olami\OneDrive - Loughborough University\MusicRent\Rental_Info.pdf'
+file_path3 = r'C:\Users\olami\OneDrive - Loughborough University\MusicRent\Subscription_Info.pdf'
 
-# Sphinx documentation
-docs/_build/
+DB_FILE = 'music_rental_info'
 
-# PyBuilder
-.pybuilder/
-target/
+# read pdf file function (specifically the data)
+def readpdf_files(file_path):
+    record_data = []
+    
+    with pdfplumber.open(file_path) as pdf:
+        # Go through the pages
+        firstpage = pdf.pages[0]
+        
+        table = firstpage.extract_table()
+        
+        if table:
+            headers = [header.strip() for header in table[0]]
+            for row in table[1:]:
+                record = {headers[i]: row[i].strip() if row[i] else '' for i in range(len(headers))}
+                record_data.append(record)
+    return record_data
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# load pdf into csv
+def create_pdf_into_csv(csv_file, pdf_file):
+    with pdfplumber.open(pdf_file) as pdf:
+        all_data = []
+        for page in pdf.pages:
+            table = page.extract_table()
+            if table:
+                all_data.extend(table)
+        with open(csv_file, mode='w', newline='', encoding='utf-8') as csv_file:
+            writer = csv.writer(csv_file)
+            for row in all_data:
+                writer.writerow(row)
 
-# IPython
-profile_default/
-ipython_config.py
+csv_file = r'C:\Users\olami\OneDrive - Loughborough University\MusicRent\Subscription_Info.csv'
+pdf_file = r'C:\Users\olami\OneDrive - Loughborough University\MusicRent\Subscription_Info.pdf'
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
+# creating database
+def database():
+    with shelve.open(DB_FILE) as db:
+        if 'music_info' not in db:
+            db['music_info'] = readpdf_files(file_path)
+        if 'rental_info' not in db:
+            db['rental_info'] = readpdf_files(file_path2)
+        if 'subscription_info' not in db:
+            db['subscription_info'] = readpdf_files(file_path3)
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
 
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
-.pdm.toml
-.pdm-python
-.pdm-build/
+# File paths
+csv_file = r'C:\Users\olami\OneDrive - Loughborough University\MusicRent\Subscription_Info.csv'
+temp_csv_file = r'C:\Users\olami\OneDrive - Loughborough University\MusicRent\Temp_Subscription_Info.csv'
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
 
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
 
-# SageMath parsed files
-*.sage.py
+# Function to preprocess the CSV file
+def preprocess_csv(input_csv, output_csv):
+    with open(input_csv, mode='r', newline='', encoding='utf-8') as infile:
+        reader = csv.DictReader(infile)
+        # Fieldnames (headers) will be copied directly
+        fieldnames = reader.fieldnames
+        
+        # Prepare the rows for the output CSV
+        rows = []
+        for row in reader:
+            # Convert 'Has Subscription' to a valid date-like placeholder
+            if row['Has Subscription'].strip().lower() == 'true':
+                row['Has Subscription'] = '2000-01-01'  # Placeholder for True
+            elif row['Has Subscription'].strip().lower() == 'false':
+                row['Has Subscription'] = '1900-01-01'  # Placeholder for False
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+            # Validating start date
+            try:
+                row['Start Date'] = datetime.strptime(row['Start Date'], '%Y-%m-%d').strftime('%Y-%m-%d')
+            except ValueError:
+                row['Start Date'] = '1970-01-01' 
 
-# Spyder project settings
-.spyderproject
-.spyproject
+            rows.append(row)
+    
 
-# Rope project settings
-.ropeproject
+    with open(output_csv, mode='w', newline='', encoding='utf-8') as outfile:
+        writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    
+    print(f"Preprocessed CSV file saved at: {output_csv}")
 
-# mkdocs documentation
-/site
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+preprocess_csv(csv_file, temp_csv_file)
 
-# Pyre type checker
-.pyre/
 
-# pytype static type analyzer
-.pytype/
+subscriptions = subscriptionManager.load_subscriptions(temp_csv_file)
+print("Loaded Subscriptions:", subscriptions)
 
-# Cython debug symbols
-cython_debug/
 
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+
+# checking subscriptions of customers for test
+def is_subscription_active(customer_id):
+    subscription_status = subscriptionManager.check_subscription(customer_id)
+    if subscription_status:
+        print(f"Customer {customer_id} has an active subscription.")
+    else:
+        print(f"Customer {customer_id} does not have an active subscription.")
+
+# Get the rental limit for a customer
+def get_customer_rental_limit(customer_id):
+    rental_limit = subscriptionManager.get_rental_limit(customer_id)
+    print(f"Customer {customer_id}'s rental limit is {rental_limit}.")
+    
+            
+# load subscription file
+def load_subscriptions():
+    with shelve.open(DB_FILE) as db:
+        subscription_info = db.get('subscription_info', [])
+        if not subscription_info:
+            print('File not found')
+        return subscription_info
+            
+# create search music function
+def musicSearch(field, query):
+    with shelve.open(DB_FILE) as db:
+        music_info = db.get('music_info', [])
+        return [record for record in music_info if query.lower() in record.get(field, '').lower()]
+    
+
+# rent music function
+def musicRent(customerid, recordid, subscriptions):
+    with shelve.open(DB_FILE) as db:
+        rental_info = db.get('rental_info', [])
+        
+        # check subscription and rental limit
+        subscription_info = db.get('subscription_info', [])
+        subscription_active = any(
+             sub['Customer ID'] == customerid and sub['Has Subscription'].lower() == 'true'
+             for sub in subscription_info
+        )
+        if not subscription_active:
+            return False, 'Customer does not have a valid subscription'
+        
+        for record in rental_info:
+            if record['Record ID'] == recordid:
+                # Parse data
+                return_data = record.get('Return Date')
+                if return_data:
+                    try:
+                        parsed_returndate = datetime.strptime(return_data, '%Y-%m-%d')
+                        if parsed_returndate > datetime.now():
+                            return False, 'Music Record is unavailable for renting'
+                    except ValueError:
+                        return False, 'Invalid date error with rental date'
+                record['Customer ID'] = customerid
+                record['Rental Date'] =datetime.now().strftime('%Y-%m-%d')
+                record['Return Date'] = ''
+                db['rental_info'] = rental_info
+                
+                # update music info
+                music_info = db.get('music_info', [])
+                for music in music_info:
+                    if music['Record ID'] == recordid:
+                        music['Status'] = 'Rented'
+                db['music_info'] = music_info
+                return True, 'Music record rented successfully'
+
+            
+            return False, 'Music Record is not available for rent'
+
+# creating feedback csv file
+feedback_csv = r'C:\Users\olami\OneDrive - Loughborough University\MusicRent\Feedback.csv'
+
+
+# create return  music function
+def musicReturn(recordid, rating, comments):
+    with shelve.open(DB_FILE, writeback=True) as db:
+        rental_info = db.get('rental_info', [])
+        for record in rental_info:
+            if record['Record ID'] == recordid and not record['Return Date']:
+                record['Return Date'] = '2024-12-07'
+                db['rental_info'] = rental_info
+                
+                # update music info
+                music_info = db.get('music_info', [])
+                for music in music_info:
+                    if music['Record ID'] == recordid:
+                        if 'Status' not in music:
+                            music['Status'] == 'Available'
+                        music['Status'] == 'Available'
+                db['music_info'] = music_info
+                
+                # saving feedback
+                feedback = db.get('Feedback', [])
+                feedback_entry = {
+                    'Record ID': recordid,
+                    'Rating': rating,
+                    'Comments': comments,
+                }
+                feedback.append(feedback_entry)
+                db['feedback'] = feedback
+
+                # write feedback to feedback csv file
+                with open(feedback_csv, mode='a', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames=['Record ID', 'Rating', 'Comments'])
+
+                    if csvfile.tell() == 0:
+                        writer.writeheader()
+
+                    writer.writerow(feedback_entry)
+                return True, 'Music Record has been returned and feedback saved!'
+            return False, 'Music Record is not currently rented!'
+
+
+# inventory pruning function
+def inventory_pruning():
+    now = datetime.now()
+    threshold_prune = timedelta(days=1460)
+    expire_rental = timedelta(days=90)
+    
+    #
+    with shelve.open(DB_FILE, writeback=True) as db:
+        music_info = db.get('music_info', [])
+        rental_info = db.get('rental_info', [])
+
+        for music in music_info:
+            last_rentaldate = music.get('Last Rental Date')
+            if last_rentaldate:
+                try:
+                    last_rentaldate_parsed = datetime.strptime(last_rentaldate, '%Y-%m-%d')
+                    if (today - last_rentaldateparsed) > expire_rental:
+                        rental_info.remove(record) # removes record if it is past expiration date
+                except ValueError:
+                    pass
+
+        # update
+        db['music_info'] = music_info
+        db['rental_info'] = rental_info
+            
+# display in nice format using PrettyTable library
+def display_Music_Info(data):
+    table = PrettyTable()
+    if data:
+        table.field_names = data[0].keys()
+        for record in data:
+            table.add_row(record.values())
+        with output:
+            clear_output()
+            print(table)
+    else:
+        with output:
+            clear_output()
+            print('No table found!')
+            
+# database is called
+database()
+    
+
+# Create dropdown widget
+dropdown = widgets.Dropdown(
+   options = ['Search Music', 'Rent Music', 'Return Music', 'Inventory Pruning'],
+   value = 'Search Music',
+   description = 'Menu',
+   disabled=False
+)
+
+# widget for search
+search_query = widgets.Text(placeholder='Enter query', description='Query:')
+search_button = widgets.Button(description='Search')
+output = widgets.Output()
+
+# create a text widget/ name of gui
+gui_name = widgets.Text(
+   placeholder='Music Store Rental Management System',
+   description='',
+)
+
+# musicSearch widget
+musicSearch_field = widgets.Dropdown(
+    options = ['Artist', 'Title', 'Medium', 'Genre'],
+    description = 'Search by',
+)
+
+# musicReturn widgets
+return_recordid = widgets.Text(description='Record ID')
+return_rating = widgets.IntSlider(description='Rating', min=1, max=5, step=1, value=5)
+return_comments = widgets.Textarea(description='Comments', placeholder='Enter comments')
+musicReturn_button = widgets.Button(description='Return Music')
+return_output = widgets.Output()
+
+# making these rental widgets globally acessible
+input_customerid = widgets.Text(description='Customer ID')
+input_recordid = widgets.Text(description='Record ID')
+rentmusic_button = widgets.Button(description='Rent Music')
+rent_output = widgets.Output()
+
+# button handles
+def click_search(b):
+    with output:
+        clear_output()
+        field = musicSearch_field.value
+        query = search_query.value.strip()
+        results = musicSearch(field, query)
+        display_Music_Info(results)
+                
+            
+def musicReturn_button_click(b):
+    with return_output:
+        clear_output()
+        record_id = return_recordid.value.strip()
+        rating = return_rating.value
+        comments = return_comments.value.strip()
+        success, message = musicReturn(record_id, rating, comments)
+        print(message)
+
+def musicRent_button_click(b):
+    with rent_output:
+        clear_output()
+        customerid = input_customerid.value.strip()
+        recordid = input_recordid.value.strip()
+        success, message = musicRent(customerid, recordid, subscriptions)
+        print(message)
+
+# linking buttons to the handlers
+musicReturn_button.on_click(musicReturn_button_click)
+rentmusic_button.on_click(musicRent_button_click)
+search_button.on_click(click_search)
+
+
+# creating a change in menu selection
+def change_in_menu_selection(change):
+    with output:
+        clear_output()
+        if change['new'] == 'Search Music':
+            blank_window.children = [
+                gui_name,
+                dropdown,
+                musicSearch_field,
+                search_query,
+                search_button,
+                output,
+            ]
+        elif change['new'] == 'Rent Music':
+            blank_window.children = [
+                gui_name,
+                dropdown,
+                input_customerid,
+                input_recordid,
+                rentmusic_button,
+                rent_output
+            ]
+        elif change['new'] == 'Return Music':
+            blank_window.children = [
+                gui_name,
+                dropdown,
+                return_recordid,
+                return_rating,
+                return_comments,
+                musicReturn_button,
+                return_output
+            ]
+        else:
+            print('Functionality has not been implemented yet')
+            
+# linking change in menu to search music
+dropdown.observe(change_in_menu_selection, names='value')      
+    
+    
+
+# to display the widgets on the window widget
+blank_window.children = [
+    gui_name,
+    dropdown,
+    musicSearch_field,
+    search_query,
+    search_button,
+    output,
+    
+]
+
+
+# display this window
+display(blank_window)
